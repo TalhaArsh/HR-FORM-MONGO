@@ -1,11 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 import os
 from pymongo import MongoClient
+from bson.binary import Binary
 from datetime import timedelta
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
+
 def get_db_connection():
     username = os.getenv('MONGO_USERNAME')
     password = os.getenv('MONGO_PASSWORD')
@@ -13,16 +14,14 @@ def get_db_connection():
     return client['formdata']
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads/'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
-app.secret_key = 'your_secret_key'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=1)
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
+app.secret_key = os.getenv('SECRET_KEY')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 
-# Test credentials
-USERNAME = "root"
-PASSWORD = "1234"
+USERNAME = os.getenv('USERNAMES')
+PASSWORD = os.getenv('PASSWORDS')
+
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -80,23 +79,24 @@ def upload():
                 error_found = True
                 break
 
-            # Comment out or remove file processing
-            # files = request.files.getlist(f'file{i}')
-            # file_paths = []
-            # for file in files:
-            #     if file and file.filename != '' and allowed_file(file.filename):
-            #         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-            #         file.save(file_path)
-            #         file_paths.append(file_path)
-            #     elif file.filename != '':
-            #         flash('Invalid file format. Only PDF, JPG, JPEG, PNG files are allowed.', 'error')
-            #         error_found = True
-            #         break
+            files = request.files.getlist(f'file{i}')
+            file_data_list = []
+            for file in files:
+                if file and file.filename != '' and allowed_file(file.filename):
+                    file_data = Binary(file.read())
+                    file_data_list.append({
+                        'filename': file.filename,
+                        'data': file_data,
+                        'content_type': file.content_type
+                    })
+                elif file.filename != '':
+                    flash('Invalid file format. Only PDF, JPG, JPEG, PNG files are allowed.', 'error')
+                    error_found = True
+                    break
 
-            # if error_found:
-            #     break
+            if error_found:
+                break
 
-            # Insert data into MongoDB without file paths
             collection.insert_one({
                 'name': name,
                 'institute': institute,
@@ -104,7 +104,7 @@ def upload():
                 'from_date': from_date,
                 'to_date': to_date,
                 'majors': majors,
-                'file_paths': 'trial',  # Commented out
+                'files': file_data_list,
                 'na': False
             })
 
@@ -113,6 +113,5 @@ def upload():
 
     return redirect(url_for('index'))
 
-
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port = 5000)
+    app.run(debug=True)
