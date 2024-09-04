@@ -80,21 +80,23 @@ def upload():
                 error_found = True
                 break
 
-            files = request.files.getlist(f'file{i}')
-            file_paths = []
-            for file in files:
-                if file and file.filename != '' and allowed_file(file.filename):
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-                    file.save(file_path)
-                    file_paths.append(file_path)
-                elif file.filename != '':
-                    flash('Invalid file format. Only PDF, JPG, JPEG, PNG files are allowed.', 'error')
-                    error_found = True
-                    break
+            # Comment out or remove file processing
+            # files = request.files.getlist(f'file{i}')
+            # file_paths = []
+            # for file in files:
+            #     if file and file.filename != '' and allowed_file(file.filename):
+            #         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            #         file.save(file_path)
+            #         file_paths.append(file_path)
+            #     elif file.filename != '':
+            #         flash('Invalid file format. Only PDF, JPG, JPEG, PNG files are allowed.', 'error')
+            #         error_found = True
+            #         break
 
-            if error_found:
-                break
+            # if error_found:
+            #     break
 
+            # Insert data into MongoDB without file paths
             collection.insert_one({
                 'name': name,
                 'institute': institute,
@@ -102,7 +104,7 @@ def upload():
                 'from_date': from_date,
                 'to_date': to_date,
                 'majors': majors,
-                'file_paths': file_paths,
+                'file_paths': 'trial',  # Commented out
                 'na': False
             })
 
@@ -110,6 +112,7 @@ def upload():
         flash('Form submitted successfully!', 'success')
 
     return redirect(url_for('index'))
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port = 5000)
