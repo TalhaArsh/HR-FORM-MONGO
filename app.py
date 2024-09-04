@@ -1,29 +1,67 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import os
 from pymongo import MongoClient
+from datetime import timedelta
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 def get_db_connection():
-    client = MongoClient("mongodb+srv://talhaarshad901:mongowongo@cluster0.71tvv.mongodb.net/")
+    username = os.getenv('MONGO_USERNAME')
+    password = os.getenv('MONGO_PASSWORD')
+    client = MongoClient(f"mongodb+srv://{username}:{password}@cluster0.71tvv.mongodb.net/")
     return client['formdata']
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 app.secret_key = 'your_secret_key'
-
-# Ensure the upload folder exists
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
-#mongowongo
+
+# Test credentials
+USERNAME = "root"
+PASSWORD = "1234"
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def index():
-    return render_template('form.html')
+    if 'username' in session:
+        return render_template('form.html')
+    else:
+        return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if username == USERNAME and password == PASSWORD:
+            session['username'] = username
+            session.permanent = True
+            flash('Login successful!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+            return redirect(url_for('login'))
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    flash('You have been logged out.', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/upload', methods=['POST'])
 def upload():
+    if 'username' not in session:
+        flash('Please log in to continue.', 'error')
+        return redirect(url_for('login'))
+
     db = get_db_connection()
     collection = db['education_background']
     error_found = False
@@ -36,16 +74,12 @@ def upload():
             from_date = request.form.get(f'from_date{i}', '')
             to_date = request.form.get(f'to_date{i}', '')
             majors = request.form.get(f'majors{i}', '')
-            # Debugging: print form data
-            print(f'Row {i}: name={name}, institute={institute}, gpa_grade={gpa_grade}, from_date={from_date}, to_date={to_date}, majors={majors}')
 
-            # Validate required fields
             if not institute or not gpa_grade or not from_date or not to_date or not majors:
                 flash(f"Please fill out all required fields for row {i}.", 'error')
                 error_found = True
                 break
 
-            # Handle file upload
             files = request.files.getlist(f'file{i}')
             file_paths = []
             for file in files:
@@ -61,7 +95,6 @@ def upload():
             if error_found:
                 break
 
-            # Insert the document into MongoDB
             collection.insert_one({
                 'name': name,
                 'institute': institute,
